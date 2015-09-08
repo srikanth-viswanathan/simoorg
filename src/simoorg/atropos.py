@@ -82,7 +82,6 @@ class Atropos(object):
         self.debug = debug
         self.config_dir = config_dir
 
-        self.nyx = False
         self.non_deterministic_schdlr_flag = False
         self.deterministic_schdlr_flag = False
         self.logger_instance = None
@@ -420,7 +419,7 @@ class Atropos(object):
         """
         try:
             self.logger_instance.logit("INFO",
-                                       "Healthceck plugin defined: {0}"
+                                       "Healthcheck plugin defined: {0}"
                                        .format(plugin_name),
                                        log_level="VERBOSE")
             healthcheck_module = __import__(HEALTHCHECK_PLUGIN_PATH + '.' +
@@ -466,16 +465,16 @@ class Atropos(object):
                 print ('[DEBUG INFO]: FOUND IN CUSTOM FAILRUES. '
                        'about to run handler:', custom_failure_definition,
                        'for', failure_name)
-            # break immediately, as custom failures overried base failures
+            # break immediately, as custom failures override base failures
             handler_data = custom_failure_definition
             if SUDO_USER_KEY in handler_data:
                 sudo_user = handler_data[SUDO_USER_KEY]
             else:
                 sudo_user = None
         else:
-            print ('[WARNING]: Failure', failure_name,
-                   'has not been found in nyx.yaml and FateBook for ',
-                   self.service)
+            print ('[ERROR]: Failure', failure_name,
+                   'has not been found in FateBook for ', self.service)
+            return
 
         hc_config = self.get_health_check()
         hc_plugin_config = None
@@ -493,79 +492,80 @@ class Atropos(object):
                                                    " Skipping the failure"
                                                    " scenario",
                                            log_level="INFO")
-            else:
-                self.logger_instance.logit("INFO",
-                                           "HealthCheck successfully finished."
-                                           " Proceeding with the failure"
-                                           " scenario", log_level="INFO")
-                if self.journal.is_total_impact_allowed():
-                    self.logger_instance.logit("INFO",
-                                               "Total impact is allowed",
-                                               log_level="VERBOSE")
-                    self.journal.cast_impact(node)
-                    self.failure_in_flight = True
-                    if self.run_inducer(node, handler_data['induce_handler'],
-                                        sudo_user):
-                        self.logger_instance.logit("INFO",
-                                                   "Successfully executed "
-                                                   "induce handler for: {0}"
-                                                   .format(failure_name))
-                        self.event_queue.put((self.service, failure_name,
-                                              trigger_time, node,
-                                              True))
+                return
 
-                        self.logger_instance.logit("INFO",
-                                                   "Waiting {0} seconds before"
-                                                   " waking up "
-                                                   "and issuing a revert"
-                                                   .format(
-                                                       handler_data[
-                                                           'wait_seconds']))
-                        sleep_correctly(handler_data['wait_seconds'])
-                        if self.run_reverter(node,
-                                             handler_data['restore_handler'],
-                                             sudo_user):
-                            self.logger_instance.logit("INFO",
-                                                       "Successfully executed"
-                                                       " revert handler for:"
-                                                       " {0}"
-                                                       .format(failure_name))
-                            self.journal.revert_impact(node)
-                            self.failure_in_flight = False
-                            self.event_queue.put((self.service,
-                                                  failure_name + '-revert',
-                                                  trigger_time, node,
-                                                  True))
+            self.logger_instance.logit("INFO",
+                                       "HealthCheck successfully finished."
+                                       " Proceeding with the failure"
+                                       " scenario", log_level="INFO")
 
-                        else:
-                            self.logger_instance.logit("WARNING",
-                                                       "Could not run revert "
-                                                       "hadler for: {0}"
-                                                       .format(failure_name))
-                            self.event_queue.put((self.service,
-                                                  failure_name + '-revert',
-                                                  trigger_time, node,
-                                                  False))
+            if not self.journal.is_total_impact_allowed():
+                self.logger_instance.logit("ERROR",
+                                           "Impact limit reached. Please "
+                                           "fix the service and rerun the "
+                                           "failure inducer")
+                sys.exit()
 
-                    else:
-                        self.logger_instance.logit("WARNING",
-                                                   "Could not run induce "
-                                                   "handler for: {0}"
-                                                   .format(failure_name))
-                        self.event_queue.put((self.service, failure_name,
-                                              trigger_time, node,
-                                              False))
-                        self.event_queue.put((self.service,
-                                              failure_name + '-revert',
-                                              trigger_time, node,
-                                              False))
+            self.logger_instance.logit("INFO",
+                                       "Total impact is allowed",
+                                       log_level="VERBOSE")
+            self.journal.cast_impact(node)
+            self.failure_in_flight = True
 
-                else:
-                    self.logger_instance.logit("WARNING",
-                                               "Impact limit reached. Please "
-                                               "fix the service and rerun the "
-                                               "failure inducer")
-                    sys.exit()
+            if not self.run_inducer(node, handler_data['induce_handler'],
+                                sudo_user):
+                self.logger_instance.logit("WARNING",
+                                           "Could not run induce "
+                                           "handler for: {0}"
+                                           .format(failure_name))
+                self.event_queue.put((self.service, failure_name,
+                                      trigger_time, node,
+                                      False))
+                self.event_queue.put((self.service,
+                                      failure_name + '-revert',
+                                      trigger_time, node,
+                                      False))
+
+            self.logger_instance.logit("INFO",
+                                       "Successfully executed "
+                                       "induce handler for: {0}"
+                                       .format(failure_name))
+            self.event_queue.put((self.service, failure_name,
+                                  trigger_time, node,
+                                  True))
+
+            self.logger_instance.logit("INFO",
+                                       "Waiting {0} seconds before"
+                                       " waking up "
+                                       "and issuing a revert"
+                                       .format(
+                                           handler_data[
+                                               'wait_seconds']))
+            sleep_correctly(handler_data['wait_seconds'])
+            if not self.run_reverter(node,
+                                 handler_data['restore_handler'],
+                                 sudo_user):
+                self.logger_instance.logit("WARNING",
+                                           "Could not run revert "
+                                           "handler for: {0}"
+                                           .format(failure_name))
+                self.event_queue.put((self.service,
+                                      failure_name + '-revert',
+                                      trigger_time, node,
+                                      False))
+
+            self.logger_instance.logit("INFO",
+                                       "Successfully executed"
+                                       " revert handler for:"
+                                       " {0}"
+                                       .format(failure_name))
+            self.journal.revert_impact(node)
+            self.failure_in_flight = False
+            self.event_queue.put((self.service,
+                                  failure_name + '-revert',
+                                  trigger_time, node,
+                                  True))
+
         except Exception:
             raise
 
@@ -630,7 +630,7 @@ class Atropos(object):
         """
         self.logger_instance.logit("INFO",
                                    "Starting {0} on: {1},"
-                                   " coodrinate: {2}, args: {3}"
+                                   " coordinate: {2}, args: {3}"
                                    .format(handler_name, target,
                                            coordinate, arguments), "VERBOSE")
         # XXX add try catch exception

@@ -58,7 +58,7 @@ class NonDeterministicScheduler(BaseScheduler):
             Return:
                 None
             Raise:
-                None
+                ValueError if 'max_gap < min_gap'
         """
         if self.debug:
             print ('[VERBOSE INFO]: Generating plan for the NonDeterministic'
@@ -71,6 +71,11 @@ class NonDeterministicScheduler(BaseScheduler):
         random.shuffle(failure_list)
         while not planning_completed:
             for failure_name in failure_list:
+                min_gap = get_min_gap_between_failures()
+                max_gap = get_max_gap_between_failures()
+                if max_gap < min_gap:
+                    raise ValueError('max_gap %d cannot be lower than min_gap %d' % (min_gap, max_gap))
+
                 random_step = random.randint(self.
                                              get_min_gap_between_failures(),
                                              self.

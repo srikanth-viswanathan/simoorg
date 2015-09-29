@@ -156,15 +156,15 @@ class Atropos(object):
                                    .format(self.scheduler_plugin),
                                    log_level="VERBOSE")
         try:
-            scheduler_module = __import__(SCHEDULER_PLUGIN_PATH + '.' +
-                                          self.scheduler_plugin + '.' +
-                                          self.scheduler_plugin,
+            plugin = '{0}.{1}.{1}'.format(SCHEDULER_PLUGIN_PATH,
+                                          self.scheduler_plugin)
+            scheduler_module = __import__(plugin,
                                           fromlist=self.scheduler_plugin)
         except ImportError:
             self.logger_instance.logit("Error",
                                        "The scheduler plugin {0}"
-                                       " not found"
-                                       .format(self.scheduler_plugin),
+                                       " was not found"
+                                       .format(plugin),
                                        log_level="VERBOSE")
             raise
         try:
@@ -355,22 +355,22 @@ class Atropos(object):
             self.topology_plugin = DEFAULT_TOPOPLOGY_PLUGIN
         try:
             # Try importing the plugin specified in the config
-            topology_module = __import__(TOPOLOGY_PLUGIN_PATH + '.' +
-                                         self.topology_plugin + '.' +
-                                         self.topology_plugin,
+            plugin = '{0}.{1}.{1}'.format(TOPOLOGY_PLUGIN_PATH,
+                                          self.topology_plugin)
+            topology_module = __import__(plugin,
                                          fromlist=[self.topology_plugin])
         except ImportError:
             # if topology import failed try import the default topology
             self.logger_instance.logit("WARNING",
-                                       "Specified Topology plugin does"
-                                       " not exist."
-                                       "Trying default topology plugin:" +
-                                       DEFAULT_TOPOPLOGY_PLUGIN,
+                                       "Topology plugin {0} does"
+                                       " not exist. Trying default plugin: "
+                                       "{1}".format(plugin,
+                                                    DEFAULT_TOPOPLOGY_PLUGIN),
                                        log_level="WARNING")
             self.topology_plugin = DEFAULT_TOPOPLOGY_PLUGIN
-            topology_module = __import__(TOPOLOGY_PLUGIN_PATH + '.' +
-                                         self.topology_plugin + '.' +
-                                         self.topology_plugin,
+            plugin = '{0}.{1}.{1}'.format(TOPOLOGY_PLUGIN_PATH,
+                                          self.topology_plugin)
+            topology_module = __import__(plugin,
                                          fromlist=[self.topology_plugin])
         try:
             topology_class = getattr(topology_module, self.topology_plugin)
@@ -422,15 +422,13 @@ class Atropos(object):
                                        "Healthcheck plugin defined: {0}"
                                        .format(plugin_name),
                                        log_level="VERBOSE")
-            healthcheck_module = __import__(HEALTHCHECK_PLUGIN_PATH + '.' +
-                                            plugin_name + '.' + plugin_name,
-                                            fromlist=[plugin_name])
+            plugin = '{0}.{1}.{1}'.format(HEALTHCHECK_PLUGIN_PATH, plugin_name)
+            healthcheck_module = __import__(plugin, fromlist=[plugin_name])
         except ImportError as exc:
             self.logger_instance.logit("INFO",
-                                       "Healthcheck block defined,"
-                                       " but content is bad."
+                                       "Unable to import plugin: {0}."
                                        " Disabling healthcheck altogether"
-                                       " {0}".format(exc),
+                                       " {1}".format(plugin, exc),
                                        log_level="WARNING")
             self.healthcheck = None
             raise
